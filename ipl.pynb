@@ -1,0 +1,174 @@
+# Importing Necessary Libraries
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVR
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import mean_absolute_error as mae, mean_squared_error as mse
+import matplotlib.pyplot as plt
+
+# Importing dataset
+ipl_df = pd.read_csv('ipl_data.csv')
+print(f"Dataset successfully Imported of Shape : {ipl_df.shape}")
+
+# Names of all columns
+print(ipl_df.columns)
+
+# Drop irrelevant columns
+irrelevant = ['mid', 'date', 'venue', 'batsman', 'bowler', 'striker', 'non-striker']
+print(f'Before Removing Irrelevant Columns : {ipl_df.shape}')
+ipl_df = ipl_df.drop(irrelevant, axis=1) # Drop Irrelevant Columns
+print(f'After Removing Irrelevant Columns : {ipl_df.shape}')
+print(ipl_df.head())
+
+# Define consistent teams
+const_teams = ['Kolkata Knight Riders', 'Chennai Super Kings', 'Rajasthan Royals',
+               'Mumbai Indians', 'Kings XI Punjab', 'Royal Challengers Bangalore',
+               'Delhi Daredevils', 'Sunrisers Hyderabad']
+
+# Remove inconsistent teams
+print(f'Before Removing Inconsistent Teams : {ipl_df.shape}')
+ipl_df = ipl_df[(ipl_df['bat_team'].isin(const_teams)) & (ipl_df['bowl_team'].isin(const_teams))]
+print(f'After Removing Inconsistent Teams : {ipl_df.shape}')
+print(f"Consistent Teams : \n{ipl_df['bat_team'].unique()}")
+print(ipl_df.head())
+
+# Remove rows where overs are less than 5
+print(f'Before Removing Overs : {ipl_df.shape}')
+ipl_df = ipl_df[ipl_df['overs'] >= 5.0]
+print(f'After Removing Overs : {ipl_df.shape}')
+print(ipl_df.head())
+
+# Encode categorical variables
+le = LabelEncoder()
+for col in ['bat_team', 'bowl_team']:
+    ipl_df[col] = le.fit_transform(ipl_df[col])
+print(ipl_df.head())
+
+# OneHotEncoding
+columnTransformer = ColumnTransformer([('encoder', OneHotEncoder(), [0, 1])], remainder='passthrough')
+ipl_df = np.array(columnTransformer.fit_transform(ipl_df))
+
+# Create DataFrame
+cols = ['batting_team_Chennai Super Kings', 'batting_team_Delhi Daredevils', 'batting_team_Kings XI Punjab',
+        'batting_team_Kolkata Knight Riders', 'batting_team_Mumbai Indians', 'batting_team_Rajasthan Royals',
+        'batting_team_Royal Challengers Bangalore', 'batting_team_Sunrisers Hyderabad',
+        'bowling_team_Chennai Super Kings', 'bowling_team_Delhi Daredevils', 'bowling_team_Kings XI Punjab',
+        'bowling_team_Kolkata Knight Riders', 'bowling_team_Mumbai Indians', 'bowling_team_Rajasthan Royals',
+        'bowling_team_Royal Challengers Bangalore', 'bowling_team_Sunrisers Hyderabad', 
+        'runs', 'wickets', 'overs', 'runs_last_5', 'wickets_last_5', 'total']
+df = pd.DataFrame(ipl_df, columns=cols)
+
+# Encoded Data
+print(df.head())
+
+# Features and labels
+features = df.drop(['total'], axis=1)
+labels = df['total']
+
+# Split data into training and testing sets
+train_features, test_features, train_labels, test_labels = train_test_split(features, labels, test_size=0.20, shuffle=True)
+print(f"Training Set : {train_features.shape}\nTesting Set : {test_features.shape}")
+
+# Initialize models dictionary
+models = dict()
+
+# Train SVM model
+svm = SVR()
+svm.fit(train_features, train_labels)
+train_score_svm = svm.score(train_features, train_labels) * 100
+test_score_svm = svm.score(test_features, test_labels) * 100
+print(f'Train Score : {train_score_svm:.2f}%\nTest Score : {test_score_svm:.2f}%')
+
+# Add SVM scores to models dictionary
+models['Support Vector Regression'] = test_score_svm
+
+# Train Naive Bayes model
+nb = GaussianNB()
+nb.fit(train_features, train_labels)
+train_score_nb = nb.score(train_features, train_labels) * 100
+test_score_nb = nb.score(test_features, test_labels) * 100
+print(f'Train Score : {train_score_nb:.2f}%\nTest Score : {test_score_nb:.2f}%')
+
+# Add Naive Bayes scores to models dictionary
+models['Gaussian Naive Bayes'] = test_score_nb
+
+# Model Evaluation SVM
+print("---- Support Vector Regression - Model Evaluation ----")
+print("Mean Absolute Error (MAE): {}".format(mae(test_labels, svm.predict(test_features))))
+print("Root Mean Squared Error (RMSE): {}".format(np.sqrt(mse(test_labels, svm.predict(test_features)))))
+
+# Model Evaluation NB
+print("---- Gaussian Naive Bayes - Model Evaluation ----")
+print("Mean Absolute Error (MAE): {}".format(mae(test_labels, nb.predict(test_features))))
+print("Root Mean Squared Error (RMSE): {}".format(np.sqrt(mse(test_labels, nb.predict(test_features)))))
+
+# Plotting model performance
+model_names = list(models.keys())
+accuracy = list(models.values())
+
+plt.figure(figsize=(5, 3))
+plt.bar(model_names, accuracy, color='blue')
+plt.xlabel('Model Names')
+plt.ylabel('Accuracy (%)')
+plt.title('Model Comparison')
+plt.show()
+
+# Prediction function
+def score_predict(batting_team, bowling_team, runs, wickets, overs, runs_last_5, wickets_last_5, model=svm):
+    prediction_array = []
+    # Batting Team
+    if batting_team == 'Chennai Super Kings':
+        prediction_array = prediction_array + [1,0,0,0,0,0,0,0]
+    elif batting_team == 'Delhi Daredevils':
+        prediction_array = prediction_array + [0,1,0,0,0,0,0,0]
+    elif batting_team == 'Kings XI Punjab':
+        prediction_array = prediction_array + [0,0,1,0,0,0,0,0]
+    elif batting_team == 'Kolkata Knight Riders':
+        prediction_array = prediction_array + [0,0,0,1,0,0,0,0]
+    elif batting_team == 'Mumbai Indians':
+        prediction_array = prediction_array + [0,0,0,0,1,0,0,0]
+    elif batting_team == 'Rajasthan Royals':
+        prediction_array = prediction_array + [0,0,0,0,0,1,0,0]
+    elif batting_team == 'Royal Challengers Bangalore':
+        prediction_array = prediction_array + [0,0,0,0,0,0,1,0]
+    elif batting_team == 'Sunrisers Hyderabad':
+        prediction_array = prediction_array + [0,0,0,0,0,0,0,1]
+    # Bowling Team
+    if bowling_team == 'Chennai Super Kings':
+        prediction_array = prediction_array + [1,0,0,0,0,0,0,0]
+    elif bowling_team == 'Delhi Daredevils':
+        prediction_array = prediction_array + [0,1,0,0,0,0,0,0]
+    elif bowling_team == 'Kings XI Punjab':
+        prediction_array = prediction_array + [0,0,1,0,0,0,0,0]
+    elif bowling_team == 'Kolkata Knight Riders':
+        prediction_array = prediction_array + [0,0,0,1,0,0,0,0]
+    elif bowling_team == 'Mumbai Indians':
+        prediction_array = prediction_array + [0,0,0,0,1,0,0,0]
+    elif bowling_team == 'Rajasthan Royals':
+        prediction_array = prediction_array + [0,0,0,0,0,1,0,0]
+    elif bowling_team == 'Royal Challengers Bangalore':
+        prediction_array = prediction_array + [0,0,0,0,0,0,1,0]
+    elif bowling_team == 'Sunrisers Hyderabad':
+        prediction_array = prediction_array + [0,0,0,0,0,0,0,1]
+    prediction_array = prediction_array + [runs, wickets, overs, runs_last_5, wickets_last_5]
+    prediction_array = np.array([prediction_array])
+    pred = model.predict(prediction_array)
+    return int(round(pred[0]))
+
+batting_team='Delhi Daredevils'
+bowling_team='Chennai Super Kings'
+score = score_predict(batting_team, bowling_team, overs=10.2, runs=68, wickets=3, runs_last_5=29, wickets_last_5=1)
+print(f'Predicted Score : {score} || Actual Score : 147')
+
+
+ batting_team='Mumbai Indians'
+bowling_team='Kings XI Punjab'
+score = score_predict(batting_team, bowling_team, overs=12.3, runs=113, wickets=2, runs_last_5=55, wickets_last_5=0)
+print(f'Predicted Score : {score} || Actual Score : 176')  
+
+
+
+
